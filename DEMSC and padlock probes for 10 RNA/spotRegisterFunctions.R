@@ -13,7 +13,16 @@ distance = function(spot1, spot2) {
 
 # Distance between two spots (um), could be a vector
 spot_distance = function(spot1, spot2) {
-    sqrt((spot1$Pos_X - spot2$Pos_X)^2 + (spot1$Pos_Y - spot2$Pos_Y)^2)
+    if (nrow(spot1) == 0 || nrow(spot2) == 0) {
+        print("warning: in spot_distance function, at least one of the spot is empty.")
+        distance <- Inf
+    } else if (is.na(spot1[1,1]) || is.na(spot2[1,1])) {
+        print("warning: in spot_distance function, at least one of the spot is NA.")
+        distance <- Inf
+    } else {
+        distance <- sqrt((spot1$Pos_X - spot2$Pos_X)^2 + (spot1$Pos_Y - spot2$Pos_Y)^2)
+    }
+    distance
 }
 
 # spot2$Pos_X - spot1$Pos_X, could be a vector
@@ -291,7 +300,7 @@ moveXY = function(spot, deltaX, deltaY) {
 # Get the closest refspots to spots, and calculate the average distance between
 # closest refSpots and spots.
 avgDistanceToClosestRefSpot = function (spots, refSpots) {
-    closestRefSpots <- closestSpot (spots, refSpots)
+    closestRefSpots <- closestSpot(spots, refSpots)
     averageDistance <- avgDistance(spots, closestRefSpots)
     averageDistance
 }
@@ -308,6 +317,7 @@ avgDistance = function(spots1, spots2) {
 # Debug, remove comments
 # Get closestSpot of spots choosing from refSpots
 # If spots is a vector, go through spots to find out the closest spot for each element of the vector
+# If refSpots is empty, return NA.
 closestSpot = function(spots, refSpots, countOnlyUnusedSpots = FALSE) {
     closestSpotIndice <- closestSpotIndex(spots, refSpots, countOnlyUnusedSpots)  
     closestSpot <- refSpots[closestSpotIndice,]                 

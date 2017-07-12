@@ -313,12 +313,15 @@ dao_fillInOneCospotToXCospotsWithUnusedSpots = function (ref_spots, x, secondary
                                     (closestSpotInRefSpots$Pos_Y == interestedSpots$Pos_Y)) 
         
         # Update the columns of transMergedNumCoSpots and transMergedCoSpotsIndice of ref_spots
-        interestedSpots[iDistanceSmall, paste("transMergedNumCoSpots", mergedName, sep = "")] <- 
-            interestedSpots[iDistanceSmall, paste("transMergedNumCoSpots", mergedName, sep = "")] + 1
-        interestedSpots[iDistanceSmall,][[paste("transMergedCoSpotsIndice", mergedName, sep = "")]] <- 
-            mapply(c, interestedSpots[iDistanceSmall, paste("transMergedCoSpotsIndice", mergedName, sep = "")], 
-                   closestSpotIndexInFN[iDistanceSmall], SIMPLIFY=FALSE)
-        ref_spots[indexOfXSpots, ] <- interestedSpots
+        if (length(iDistanceSmall) != 0) {
+            interestedSpots[iDistanceSmall, paste("transMergedNumCoSpots", mergedName, sep = "")] <- 
+                mapply(sum, interestedSpots[iDistanceSmall, paste("transMergedNumCoSpots", mergedName, sep = "")],
+                       1, SIMPLIFY=TRUE)
+            interestedSpots[iDistanceSmall,][[paste("transMergedCoSpotsIndice", mergedName, sep = "")]] <- 
+                mapply(c, interestedSpots[iDistanceSmall, paste("transMergedCoSpotsIndice", mergedName, sep = "")], 
+                       closestSpotIndexInFN[iDistanceSmall], SIMPLIFY=FALSE)
+            ref_spots[indexOfXSpots, ] <- interestedSpots
+        }   
     }
     ref_spots
 }
@@ -346,14 +349,14 @@ dao_fillInMoreCospotsWithUnusedSpots = function (refSpots, secondaryCospotDist =
 
 
 
-# For singlylLoneRefSpots (lonelyRefSpots that has 0 or 1 coSpot in each time), assign
+# For singlylLoneRefSpots (lonely_ref_spots that has 0 or 1 coSpot in each time), assign
 # 1 color at each time point, either with FQ if numCoSpots = 1 or GaussianFit if numCoSpots = 0 
-dao_assignAllColorsFromFQOrGaussianFit = function(lonelyRefSpots, coSpot_dist = 1, 
+dao_assignAllColorsFromFQOrGaussianFit = function(lonely_ref_spots, coSpot_dist = 1, 
                                             minNumOfSpotFQFound = 1, isToPrintFit = FALSE) {
     allColors <- NULL
-    for (i in seq_along(lonelyRefSpots[,1])) {
+    for (i in seq_along(lonely_ref_spots[,1])) {
         print(i)
-        refSpot <- lonelyRefSpots[i,]
+        refSpot <- lonely_ref_spots[i,]
         separation <- ""
         allColor <- NULL
         for(mergedName in mergedNames) {
@@ -374,94 +377,6 @@ dao_assignAllColorsFromFQOrGaussianFit = function(lonelyRefSpots, coSpot_dist = 
     allColors
 }
 
-# Given a refSpot and mergeName (indicating time point), fit the 4 Gaussians for 4 colors
-# at that time point. The Gaussisans is a named list; names are g1, y1, o1, r1, etc.
-dao_4GaussianFitsWithMergedName = function(refSpot, mergedName, isToPrintFit = FALSE) {
-    fluorNamesIndice <- substr(fluorNames,2,2) == substr(mergedName,2,2)
-    transFluorXYPerPolygons4 <- transFluorXYPerPolygon[fluorNamesIndice]
-    fluorTiffMatrices4 <- fluorTiffMatrices[fluorNamesIndice]
-    fluorSpots4 <- fluorSpots[fluorNamesIndice]
-    currentFluorNames <- fluorNames[fluorNamesIndice]
-    loneGaussianFits <- dao_4GaussiansFits(refSpot, transFluorXYPerPolygons4, 
-                                    fluorTiffMatrices4, fluorSpots4, isToPrintFit,
-                                    currentFluorNames)
-    loneGaussianFits
-}
-
-# Given a refSpot, fit Gaussian at all 4 images of that time point.
-# translate the refSpot to the fluorSpots coordinates and fit within diffraction limit of the TiffMatrix
-# If a Gaussian fit return NA, substract nearby spots within 2um radius as Gaussians and refit.  
-# If the Gaussian fit returns NA again, subtract nearby spots within 3um radius as Gaussians and refit.
-dao_4GaussiansFits = function(refSpot, transFluorXYPerPolygons4, fluorTiffMatrices4,
-                              fluorSpots4, isToPrintFit = FALSE, currentFluorNames) {
-    
-    loneGaussianFits <- list()
-    for (i in seq_along(colorNames)) {
-        loneGaussianFit <- NA
-        fluorName <- names(transFluorXYPerPolygons4)[i]
-        colorName <- names(diffractionLimits)[i]
-        
-        transRefSpotOnFluor <- moveRefSpotsByTransXYPerPolygon(refSpot, polygonMatrix, 
-                                                               transFluorXYPerPolygons4[[fluorName]])
-        fluorTiffMatrix <- fluorTiffMatrices4[[fluorName]]
-        fitDistance <- diffractionLimits[[colorName]]
-        bg0 <- closestSpot(transRefSpotOnFluor, fluorSpots4[[fluorName]])$MSKY
-        loneGaussianFit <- fitGaussian2D(transRefSpotOnFluor, fluorTiffMatrix, fitDistance)
-        #loneGaussianFit <- dao_fitGaussian2DFixBg(transRefSpotOnFluor, fluorTiffMatrix, fitDistance, bg0 = bg0)
-        
-        # debug to remove or add later
-        # get nearby neighbors, if the neighbor is used, fit the neighbor with fix-centered gaussian and substract it
-        # neighborSpots <- neighbors_exclude_spot_circle(transRefSpotOnColor, colorSpotsList[[i]], neighbor_dist = 1)
-        # usedNeighborSpots <- neighborSpots %>% filter(isUsed = TRUE)
-        # debug for the isBadFit criteria.
-        isBadFit <- FALSE
-        if (!is.na(loneGaussianFit)) {
-            sigma <- getSigmaRFromGaussianFit(loneGaussianFit)
-            numNeighbors <- num_neighbors_circle(transRefSpotOnFluor, fluorSpots4[[fluorName]], 2)
-            numRefNeighbors <- num_neighbors_exclude_spot_circle(refSpot, refSpots, 2)
-            offDistance <- sqrt((transRefSpotOnFluor$Pos_X - getX0FromGaussianFit(loneGaussianFit))^2 
-                                + (transRefSpotOnFluor$Pos_Y - getY0FromGaussianFit(loneGaussianFit))^2)
-            isBadFit <- (sigma == 0.5) & (numNeighbors >= 1 | numRefNeighbors >= 1) & (offDistance > coSpotDist) 
-            # debug: use to be offDistance > fitDistance
-        }
-        if (is.na(loneGaussianFit) | isBadFit) {
-            # I changed from refSpot to transRefSpotOnFluor           
-            neighborSpots <- neighbors_circle(transRefSpotOnFluor, fluorSpots4[[fluorName]], 2)
-            loneGaussianFit <- dao_fitGuassianWithSubtraction(
-                transRefSpotOnFluor, neighborSpots, fluorTiffMatrix, fitDistance, 2, bg0)
-            if (numRefNeighbors > numNeighbors) {
-                refNeighbors <- neighbors_exclude_spot_circle(refSpot, refSpots, 2)
-                transRefNeighborsOnFluor <- moveRefSpotsByTransXYPerPolygon(refNeighbors, polygonMatrix, 
-                                                                       transFluorXYPerPolygons4[[fluorName]])
-                inteferingRefNeighborsOnFluor <- transRefNeighborsOnFluor[
-                    fluorTiffMatrix[spotsToIndice2D(transRefNeighborsOnFluor, pix_XY)] > 
-                        fluorTiffMatrix[spotsToIndice2D(transRefSpotOnFluor, pix_XY)],] 
-                # Might need to debug to set multiple Gaussian fit instead of subtraction
-                # Otherwise the subtraction might be too strong and reduce refSpot brightness
-                loneGaussianFit <- dao_fitGuassianWithSubtraction(transRefSpotOnFluor, inteferingRefNeighborsOnFluor,
-                                                                  fluorTiffMatrix, fitDistance, 2, bg0)
-                #GaussianFitFor2 <- fitGaussian2DFor2(transRefSpotOnFluor, inteferingRefNeighborsOnFluor, 
-                #                                       fluorTiffMatrix, fitDistance)
-            }
-        }
-        
-        # debug to remove or not
-        #if (is.na(loneGaussianFit)) {
-        #    # I changed from refSpot to transRefSpotOnFluor
-        #    loneGaussianFit <- dao_fitGuassianWithSubtraction(transRefSpotOnFluor, neighborSpots,
-        #                                                      fluorTiffMatrix, fitDistance, 3, bg0)
-        #}
-        
-        #        loneColorGaussianX0 <- getX0FromGaussianFit(loneColorFit)
-        #        loneColorGaussianY0 <- getY0FromGaussianFit(loneColorFit)
-        if (isToPrintFit) {
-            print(paste(colorNames[i]))
-            print(loneGaussianFit)
-        }
-        loneGaussianFits[[currentFluorNames[i]]] <- loneGaussianFit
-    }
-    loneGaussianFits
-}
 
 
 # Given a refSpot, fit Gaussian at all 4 images of that time point.
@@ -490,13 +405,13 @@ dao_chooseAColorFromGaussianFit = function(refSpot, mergedName, coSpot_dist = 1,
         transRefSpotOnFluors[[currentFluorName]] <- moveRefSpotsByTransXYPerPolygon(
             refSpot, polygonMatrix, transFluorXYPerPolygon[[currentFluorName]])
     }
-
+    
     # Only wants fitted Gaussian centers to be close to the transRefSpot
     coSpotDists <- mapply(dao_spot_fit_distance, loneGaussianFits, transRefSpotOnFluors)
     
     # Debug, because I already subtract nearby bright spots when necessary, might not need this.
     normalizedLoneGaussianAmps[coSpotDists > coSpot_dist] = 0
-        
+    
     snr <- loneGaussianAmps / loneGaussianBgs
     normalizedLoneGaussianAmps[snr < SNRThreshold] = 0
     colorOrderIndex <- order(normalizedLoneGaussianAmps, decreasing = TRUE)
@@ -528,6 +443,160 @@ dao_4NormalizedGaussianAmp = function(refSpot, mergedName, coSpot_dist = 1, isTo
     coSpotDists <- mapply(dao_spot_fit_distance, loneGaussianFits, transRefSpotOnFluors)
     normalizedLoneGaussianAmps[coSpotDists > coSpot_dist] = 0
     as.numeric(normalizedLoneGaussianAmps)
+}
+
+# get fluorNames from mergedName
+dao_mergedNameToFluorNames = function (mergedName) {
+    fluorNamesIndice <- substr(fluorNames,2,2) == substr(mergedName,2,2)
+    currentFluorNames <- fluorNames[fluorNamesIndice]
+    currentFluorNames
+}
+
+
+# Given a refSpot and mergeName (indicating time point), fit the 4 Gaussians for 4 colors
+# at that time point. The Gaussisans is a named list; names are g1, y1, o1, r1, etc.
+dao_4GaussianFitsWithMergedName = function(refSpot, mergedName, isToPrintFit = FALSE) {
+    fluorNamesIndice <- substr(fluorNames,2,2) == substr(mergedName,2,2)
+    transFluorXYPerPolygons4 <- transFluorXYPerPolygon[fluorNamesIndice]
+    fluorTiffMatrices4 <- fluorTiffMatrices[fluorNamesIndice]
+    fluorSpots4 <- fluorSpots[fluorNamesIndice]
+    currentFluorNames <-  fluorNames[fluorNamesIndice]
+    mergedMaxMinusBgTiffAmpPerColor4 <- mergedMaxMinusBgTiffAmpPerColor[[mergedName]]
+    names(mergedMaxMinusBgTiffAmpPerColor4) <- names(transFluorXYPerPolygons4)
+    loneGaussianFits <- dao_4GaussiansFits(refSpot, transFluorXYPerPolygons4, 
+                                    fluorTiffMatrices4, fluorSpots4, isToPrintFit,
+                                    currentFluorNames, mergedMaxMinusBgTiffAmpPerColor4)
+    loneGaussianFits
+}
+
+# Given a refSpot, transFluorXYPerPolygons4, fluorTiffMatrices4, and scaled
+# Return the colorName for the fluorTiffMatrix that contain the highest amplitude
+dao_brightestColorName = function(refSpot, transFluorXYPerPolygons4, fluorTiffMatrices4, 
+                                  mergedMaxMinusBgTiffAmpPerColor4) {
+    scakedAmps4 <- numeric()
+    for (fluorName in names(transFluorXYPerPolygons4)) {
+        transRefNeighborsOnFluor <- moveRefSpotsByTransXYPerPolygon(refSpot, polygonMatrix, 
+                                                                    transFluorXYPerPolygons4[[fluorName]])
+        transRefNeighborsIndice <- spotsToIndice2D(transRefNeighborsOnFluor, pix_XY)
+        amp <- fluorTiffMatrices4[[fluorName]][transRefNeighborsIndice]
+        nearbyMinAmp <- getMinNearbyAmp(fluorTiffMatrices4[[fluorName]], transRefNeighborsIndice, radius = 1/pix_XY)
+        scaledAmp <- (amp - nearbyMinAmp) / mergedMaxMinusBgTiffAmpPerColor4[fluorName]
+        scakedAmps4[fluorName] <- scaledAmp
+    }
+    names(which.max(scakedAmps4))
+}
+
+
+# Given a refSpot, fit Gaussian at all 4 images of that time point.
+# translate the refSpot to the fluorSpots coordinates and fit within diffraction limit of the TiffMatrix
+# If a Gaussian fit return NA, substract nearby spots within 2um radius as Gaussians and refit.  
+# If the Gaussian fit returns NA again, subtract nearby spots within 3um radius as Gaussians and refit.
+dao_4GaussiansFits = function(refSpot, transFluorXYPerPolygons4, fluorTiffMatrices4,
+                              fluorSpots4, isToPrintFit = FALSE, currentFluorNames,
+                              mergedMaxMinusBgTiffAmpPerColor4) {
+    
+    loneGaussianFits <- list()
+    for (i in seq_along(colorNames)) {
+        loneGaussianFit <- NA
+        fluorName <- names(transFluorXYPerPolygons4)[i]
+        colorName <- names(diffractionLimits)[i]
+        
+        transRefSpotOnFluor <- moveRefSpotsByTransXYPerPolygon(refSpot, polygonMatrix, 
+                                                               transFluorXYPerPolygons4[[fluorName]])
+        fluorTiffMatrix <- fluorTiffMatrices4[[fluorName]]
+        fitDistance <- diffractionLimits[[colorName]]
+        closetFluorSpot <- closestSpot(transRefSpotOnFluor, fluorSpots4[[fluorName]])
+        
+        # debug
+        bg0 <- closetFluorSpot$MSKY  # If the closestSpot is very far, than bg0 is not correct
+        minNearbyIntensity <- getMinNearbyAmp(fluorTiffMatrix, spotsToIndice2D(transRefSpotOnFluor, pix_XY), radius = 3 / pix_XY)
+        bg0 <- ifelse(spot_distance(transRefSpotOnFluor, closetFluorSpot) < 5, bg0, minNearbyIntensity)
+
+        loneGaussianFit <- fitGaussian2D(transRefSpotOnFluor, fluorTiffMatrix, fitDistance)
+        #loneGaussianFit <- dao_fitGaussian2DFixBg(transRefSpotOnFluor, fluorTiffMatrix, fitDistance, bg0 = bg0)
+        
+        # debug to remove or add later
+        # get nearby neighbors, if the neighbor is used, fit the neighbor with fix-centered gaussian and substract it
+        # neighborSpots <- neighbors_exclude_spot_circle(transRefSpotOnColor, colorSpotsList[[i]], neighbor_dist = 1)
+        # usedNeighborSpots <- neighborSpots %>% filter(isUsed = TRUE)
+        
+        # debug for the isBadFit criteria.
+        # Check if the previous Gaussian fit is a good fit
+        # Since there is not a coSpot, the numNeighbor only include neighboring spot
+        numNeighbors <- num_neighbors_circle(transRefSpotOnFluor, fluorSpots4[[fluorName]], 2)
+        isBadFit <- FALSE
+        if (!is.na(loneGaussianFit)[1]) {
+            sigma <- getSigmaRFromGaussianFit(loneGaussianFit)
+            numRefNeighbors <- num_neighbors_exclude_spot_circle(refSpot, refSpots, 2)
+            offDistance <- sqrt((transRefSpotOnFluor$Pos_X - getX0FromGaussianFit(loneGaussianFit))^2 
+                                + (transRefSpotOnFluor$Pos_Y - getY0FromGaussianFit(loneGaussianFit))^2)
+            isBadFit <- (sigma >= 0.45) & (numNeighbors >= 1 | numRefNeighbors >= 1) & (offDistance > coSpotDist) 
+            # debug: use to be offDistance > fitDistance
+        }
+
+        # Refit by subtrating the neighbor fluorSpots near the transRefSpotOnFluor
+        if (is.na(loneGaussianFit)[1] | isBadFit) {
+            # I changed from refSpot to transRefSpotOnFluor           
+            numRefNeighbors <- num_neighbors_exclude_spot_circle(refSpot, refSpots, 2)
+            neighborSpots <- neighbors_circle(transRefSpotOnFluor, fluorSpots4[[fluorName]], 2)
+            # This loneGuassian Fit are fixed centers and bg, so getX0FromGaussianFit or getY0FromGaussianFit are NA
+            if (nrow(neighborSpots) > 0) {
+                loneGaussianFit <- dao_fitGuassianWithSubtraction(
+                    transRefSpotOnFluor, neighborSpots, fluorTiffMatrix, fitDistance, 2, bg0)
+            }   
+        }
+            
+        # Refit by subtracting the neighbor refSpots near the transRefSpotOnFluor
+        # It happens when the DAOSTORM didn't get the neighborFluorSpots but got neightborRefSpots
+        # Need to get the amplifitude at the neightobrRefSpots for the four fluorplots, and see which fluorColor the 
+        # neighborRefSpots is at.
+        if (is.na(loneGaussianFit)[1] & numRefNeighbors > numNeighbors) {
+            transRefAmpOnFluorMatrix <- fluorTiffMatrix[spotsToIndice2D(transRefSpotOnFluor, pix_XY)]
+            refNeighbors <- neighbors_exclude_spot_circle(refSpot, refSpots, 2)
+            transRefNeighborsToSubtract <- spotDataFrame(refNeighbors)
+            for (j in seq_along(refNeighbors[,1])) {
+                refNeighbor <- refNeighbors[j,]
+                brightestColorName <- dao_brightestColorName(refNeighbor, transFluorXYPerPolygons4, 
+                                                             fluorTiffMatrices4, mergedMaxMinusBgTiffAmpPerColor4)
+                transRefNeighborOnFluor <- moveRefSpotsByTransXYPerPolygon(refNeighbor, polygonMatrix, 
+                                                                            transFluorXYPerPolygons4[[fluorName]])
+                closeFluorSpotToTransRefNeighbor <- closestSpot(transRefNeighborOnFluor, fluorSpots4[[fluorName]])
+                spotDistance <- spot_distance(transRefNeighborOnFluor, closeFluorSpotToTransRefNeighbor)
+                transRefNeighborAmpOnFluorMatrix <- fluorTiffMatrix[spotsToIndice2D(transRefNeighborOnFluor, pix_XY)]
+                if (brightestColorName == fluorName & spotDistance > 0.5 & 
+                        transRefNeighborAmpOnFluorMatrix > brightestColorName) {
+                    transRefNeighborsToSubtract <- rbind(transRefNeighborsToSubtract, transRefNeighborOnFluor)
+                }                 
+            }
+            #interferingRefNeighborsOnFluor <- transRefNeighborsToSubtract[
+            #    fluorTiffMatrix[spotsToIndice2D(transRefNeighborsToSubtract, pix_XY)] > 
+            #        fluorTiffMatrix[spotsToIndice2D(transRefSpotOnFluor, pix_XY)],]
+            if (nrow(transRefNeighborsToSubtract) > 0) {
+                # Might need to debug to set multiple Gaussian fit instead of subtraction
+                # Otherwise the subtraction might be too strong and reduce refSpot brightness
+                loneGaussianFit <- dao_fitGuassianWithSubtraction(transRefSpotOnFluor, interferingRefNeighborsOnFluor,
+                                                                  fluorTiffMatrix, fitDistance, 2, bg0)
+                #GaussianFitFor2 <- fitGaussian2DFor2(transRefSpotOnFluor, interferingRefNeighborsOnFluor, 
+                #                                       fluorTiffMatrix, fitDistance)
+            }
+        }
+        
+        # debug to remove or not
+        #if (is.na(loneGaussianFit)) {
+        #    # I changed from refSpot to transRefSpotOnFluor
+        #    loneGaussianFit <- dao_fitGuassianWithSubtraction(transRefSpotOnFluor, neighborSpots,
+        #                                                      fluorTiffMatrix, fitDistance, 3, bg0)
+        #}
+        
+        #        loneColorGaussianX0 <- getX0FromGaussianFit(loneColorFit)
+        #        loneColorGaussianY0 <- getY0FromGaussianFit(loneColorFit)
+        if (isToPrintFit) {
+            print(paste(colorNames[i]))
+            print(loneGaussianFit)
+        }
+        loneGaussianFits[[currentFluorNames[i]]] <- loneGaussianFit
+    }
+    loneGaussianFits
 }
 
 
@@ -943,7 +1012,7 @@ dao_spotsToIndice2D_not_integer = function (spots, pix_XY) {
 # Plot all nearby Spots in transF1, transF2, transF3, and transF4,
 # and plot all nearby Spots in 16 tiff matrix images with the refSpot pixel
 # circled in red and neighbor fluor spots circled in white
-dao_plotAllNearby = function (spot, plot_area_dist = 2, toTranslateRef = TRUE) {
+dao_plotAllNearby = function (spot, plot_area_dist = 2, toTranslateRef = TRUE, fluorMatrices = fluorScaledMatrices) {
     
     zoomedMergedPlots <- list()
     for(mergedName in mergedNames) {
@@ -958,9 +1027,10 @@ dao_plotAllNearby = function (spot, plot_area_dist = 2, toTranslateRef = TRUE) {
     plotNearbyTiffRaster(spot, refSpots, pix_XY, refScaledMatrix, isToTranslateRefSpots = FALSE, col = greenPalette, plot_area_dist = plot_area_dist, plotname = "nearby ref spots on tiff")
     par(mfrow = c(4,4))
     for(fluorName in fluorNames) {
-        plotNearbyTiffRaster(spot, fluorSpots[[fluorName]], pix_XY, fluorScaledMatrices[[fluorName]], 
+        plotNearbyTiffRaster(spot, fluorSpots[[fluorName]], pix_XY, fluorMatrices[[fluorName]], 
                              transFluorXYPerPolygon[[fluorName]], isToTranslateRefSpots = toTranslateRef, 
                              col = palettes[[fluorName]], plot_area_dist, 
                              plotname = paste(fluorName, "spots on fluor image"))
     }
 }
+

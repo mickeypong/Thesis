@@ -91,12 +91,12 @@ for (fluorName in fluorNames) {
 }
 
 # 2. Read all the spots, Pos_X and Pos_Y are in um
-refSpotsFilename <- paste("fits images/", gsub(" ", "_", preRefFilename), ".pos.out", sep = "")
+refSpotsFilename <- paste("DAO spots/", gsub(" ", "_", preRefFilename), ".pos.out", sep = "")
 refSpots <- read_daostorm_spots(refSpotsFilename, "gray", refTiffFilename)
 
 fluorSpotsFilenames <- list()
 for (fluorName in fluorNames) {
-    fluorSpotsFilenames[[fluorName]] <- paste("fits images/", gsub(" ", "_", preFluorFilenames[[fluorName]]), ".pos.out", sep = "")
+    fluorSpotsFilenames[[fluorName]] <- paste("DAO spots/", gsub(" ", "_", preFluorFilenames[[fluorName]]), ".pos.out", sep = "")
 }
 
 fluorColors <- list()
@@ -139,7 +139,8 @@ for (fluorName in fluorNames) {
 transFluorPlots <- list()
 for (fluorName in fluorNames) {
     transFluorPlots[[fluorName]] <- plotSpots(transFluorSpots[[fluorName]], refSpots, 
-                                              spotSize = spotSize, polygons_um = polygons_um, plotname = "transG1Plot")   
+                                              spotSize = spotSize, polygons_um = polygons_um, 
+                                              plotname = paste("trans",fluorName,"plot"))   
     print(transFluorPlots[[fluorName]])
 }
 
@@ -459,8 +460,8 @@ printCountOfMRNA(threeOffspringRefSpots$allColors, mRNAToColor)
 threeOffspringRefSpots[38,]$allColors <- "green green green yellow"
 threeOffspringRefSpots[68,]$allColors <- "green green green yellow"
 
-which(threeOffspringRefSpots$allColors == "green green green red")
-spot <- threeOffspringRefSpots[38,]; spot; dao_plotAllNearby(spot)
+which(threeOffspringRefSpots$allColors == "red green green yellow")
+spot <- threeOffspringRefSpots[39,]; spot; dao_plotAllNearby(spot)
 color <- dao_chooseAColorFromGaussianFit(spot, "f4", coSpot_dist, isToPrintFit = TRUE)
 
 
@@ -500,7 +501,7 @@ twoOffspringRefSpots[35,]$allColors <- "green green green yellow"
 twoOffspringRefSpots[63,]$allColors <- "orange green green yellow"
 
 which(twoOffspringRefSpots$allColors == "green red green yellow")
-ispot <- twoOffspringRefSpots[25,];ispot;dao_plotAllNearby(ispot, 5)
+ispot <- twoOffspringRefSpots[24,];ispot;dao_plotAllNearby(ispot, 5)
 color <- dao_chooseAColorFromGaussianFit(ispot, "f2", coSpotDist, isToPrintFit = TRUE)
 
 
@@ -560,8 +561,8 @@ oneOffspringLonelyRefSpotsLonely$allColors <- dao_assignAllColorsFromFQOrGaussia
     oneOffspringLonelyRefSpotsLonely, coSpot_dist)
 printCountOfMRNA(oneOffspringLonelyRefSpotsLonely$allColors, mRNAToColor)
 
-which(oneOffspringRefSpots$allColors == "green red green yellow")
-spot <- oneOffspringRefSpots[35,]; spot; dao_plotAllNearby(spot)
+which(oneOffspringRefSpots$allColors == "green green red red")
+spot <- oneOffspringRefSpots[38,]; spot; dao_plotAllNearby(spot)
 
 plotNearbyTiffRaster(refSpot = spot, oneOffspringLonelyRefSpots[c(43,44),], pix_XY, refScaledMatrix, isToTranslateRefSpots = FALSE, plot_area_dist = 2000)
 dao_assignAllColorsFromFQOrGaussianFit(spot, coSpot_dist, isToPrintFit = TRUE)
@@ -856,218 +857,5 @@ for (mergedName in mergedNames) {
         print(paste(brightScaledAmp, dimScaledAmp, relativeX, relativeY))
     }
 }
-
-
-
-
-
-# 9.1 Check refSpots that has 2 coSpots in a wash, and rest 0 or 1 coSpots: 154
-crowd2RefSpots <- refSpots%>% filter((transMergedNumCoSpotsf1 == 2 
-                                         & transMergedNumCoSpotsf2 < 2 
-                                         & transMergedNumCoSpotsf3 < 2 
-                                         & transMergedNumCoSpotsf4 < 2) 
-                                        | (transMergedNumCoSpotsf1 < 2 
-                                           & transMergedNumCoSpotsf2 == 2 
-                                           & transMergedNumCoSpotsf3 < 2 
-                                           & transMergedNumCoSpotsf4 < 2) 
-                                        | (transMergedNumCoSpotsf1 < 2 
-                                           & transMergedNumCoSpotsf2 < 2 
-                                           & transMergedNumCoSpotsf3 == 2 
-                                           & transMergedNumCoSpotsf4 < 2) 
-                                        | (transMergedNumCoSpotsf1 < 2 
-                                           & transMergedNumCoSpotsf2 < 2 
-                                           & transMergedNumCoSpotsf3 < 2 
-                                           & transMergedNumCoSpotsf4 == 2))
-nrow(crowd2RefSpots)
-
-# 9.2 Separate into crowd2SameColorRefSpots (2 coSpots in a time have the same color): 95
-# and crowd2DiffColorRefSpots (2 coSpots in a time have different color): 59
-crowd2SameColorRefSpots <- spotDataFrame(crowd2RefSpots)
-crowd2DiffColorRefSpots <- spotDataFrame(crowd2RefSpots)
-for(i in seq_along(crowd2RefSpots[,1])) {
-    spot <- crowd2RefSpots[i,]
-    for (mergedName in mergedNames) {
-        if (spot[[paste("transMergedNumCoSpots", mergedName, sep = "")]] == 2) {
-            transCospot1 <- transMergedSpots[[mergedName]][
-                spot[[paste("transMergedCoSpotsIndice", mergedName, sep = "")]][[1]][1],]
-            transCospot2 <- transMergedSpots[[mergedName]][
-                spot[[paste("transMergedCoSpotsIndice", mergedName, sep = "")]][[1]][2],]
-        }
-    }
-    if (transCospot1$Color == transCospot2$Color) {
-        crowd2SameColorRefSpots <- rbind(crowd2SameColorRefSpots, spot)
-    } else {
-        crowd2DiffColorRefSpots <- rbind(crowd2DiffColorRefSpots, spot)
-    }
-}
-nrow(crowd2SameColorRefSpots)
-nrow(crowd2DiffColorRefSpots)
-
-
-# 9.3 Separate crowd2SameColorRefSpots into 
-# crowd2CloseSameColorRefSpots (2 same color spots distance within 1 um): 95 and 
-# crowd2FarSameColorRefSpots (2 same color spot distance above 1 um): 0
-crowd2CloseSameColorRefSpots <- spotDataFrame(crowd2SameColorRefSpots)
-crowd2FarSameColorRefSpots <- spotDataFrame(crowd2SameColorRefSpots)
-for(i in seq_along(crowd2SameColorRefSpots[,1])) {
-    spot <- crowd2SameColorRefSpots[i,]
-    for (mergedName in mergedNames) {
-        if (spot[[paste("transMergedNumCoSpots", mergedName, sep = "")]] == 2) {
-            transCospot1 <- transMergedSpots[[mergedName]][
-                spot[[paste("transMergedCoSpotsIndice", mergedName, sep = "")]][[1]][1],]
-            transCospot2 <- transMergedSpots[[mergedName]][
-                spot[[paste("transMergedCoSpotsIndice", mergedName, sep = "")]][[1]][2],]
-        }
-    }
-    if (distance(transCospot1, transCospot2) < 1) {
-        crowd2CloseSameColorRefSpots <- rbind(crowd2CloseSameColorRefSpots, spot)   
-    } else {
-        crowd2FarSameColorRefSpots <- rbind(crowd2FarSameColorRefSpots, spot)
-    }
-}
-nrow(crowd2CloseSameColorRefSpots)
-nrow(crowd2FarSameColorRefSpots)
-
-
-# 9.4 crowd2CloseSameColorRefSpots observations:
-# crowd2CloseSameColorLonelyRefSpots_1Offsprings (with 1 offspring): 1 RN7SK, correct => 0
-# crowd2CloseSameColorLonelyRefSpots_234Offsprings (with 2, 3, or 4 offsprings): 95
-#[1] "       orange yellow red red,     7,       FTH1" x2
-#[1] "  orange yellow green yellow,     5,        FN1" x2
-#[1] "      green green red yellow,     7,       ACTB" x2
-#[1] "    green green green yellow,    48,      RN7SK" x2
-#[1] "    orange yellow red yellow,    24,      GAPDH" x2
-#[1] "      green yellow green red,     3,       ACTG" x2
-#[1] "     orange green red yellow,     1,     COL1A2" x2
-# should times the number of spots by 2 => 95 * 2 = 190
-# => keep crowd2CloseSameColorLonelyRefSpots_1Offsprings as long as other images have visible bright spots
-# => keep crowd2CloseSameColorLonelyRefSpots_234Offsprings 
-crowd2CloseSameColorRefSpots_1Offsprings <- crowd2CloseSameColorRefSpots %>% filter(
-    (transMergedNumCoSpotsf1 + transMergedNumCoSpotsf2 + transMergedNumCoSpotsf3 + transMergedNumCoSpotsf4) == 2)
-
-crowd2CloseSameColorRefSpots_1Offsprings$allColors <- dao_assignAllColorsFromFQOrGaussianFit(
-    crowd2CloseSameColorRefSpots_1Offsprings, coSpot_dist)
-printCountOfMRNA(crowd2CloseSameColorRefSpots_1Offsprings$allColors, mRNAToColor)
-nrow(crowd2CloseSameColorRefSpots_1Offsprings)
-
-crowd2CloseSameColorRefSpots_234Offsprings <- crowd2CloseSameColorRefSpots %>% filter(
-    (transMergedNumCoSpotsf1 + transMergedNumCoSpotsf2 + transMergedNumCoSpotsf3 + transMergedNumCoSpotsf4) > 2)
-
-crowd2CloseSameColorRefSpots_234Offsprings$allColors <- dao_assignAllColorsFromFQOrGaussianFit(
-    crowd2CloseSameColorRefSpots_234Offsprings, diffractionLimit, coSpot_dist)
-printCountOfMRNA(crowd2CloseSameColorRefSpots_234Offsprings$allColors, mRNAToColor)
-nrow(crowd2CloseSameColorRefSpots_234Offsprings)
-
-
-# 9.5 crowd2FarSameColorLonelyRefSpots observations (2 same color spot distance above 1 um)
-# 0 spots, should times 2 as well
-crowd2FarSameColorRefSpots$allColors <- dao_assignAllColorsFromFQOrGaussianFit(
-    crowd2FarSameColorRefSpots, coSpot_dist)
-nrow(crowd2FarSameColorRefSpots)
-printCountOfMRNA(crowd2FarSameColorRefSpots$allColors, mRNAToColor)
-
-
-# 9.6 crowd2DiffColorRefSpots observations: 59, which takes too long to analyze, give up
-# crowd2DiffColorRefSpots_nuclei: 25 were witin nuclei, which could be too hard to analyze
-# crowd2DiffColorRefSpots_not_nuclei: 34 were outside of nuclei
-#[1] "      green green red yellow,    37,       ACTB"
-#[1] "     orange green red yellow,    31,     COL1A2"
-#[1] "    orange yellow red yellow,     4,      GAPDH"
-#[1] "     green yellow red yellow,     4, "
-#[1] "    green green green yellow,     7,      RN7SK"
-#[1] "   green yellow green yellow,     2, "
-#[1] "  orange yellow green yellow,     3,        FN1"
-#[1] "   orange green green yellow,     2,       EEF2"
-#[1] "      orange green red green,     1, "
-#[1] "     orange yellow red green,     1, "
-#[1] "        green yellow red red,     1, "
-#[1] "       orange yellow red red,     1,       FTH1"
-# Also, the red fluorescent background is really annoying. Need a better image.
-# spot 9 69 75 90 are GYRY, which are bright spot along with a dim spot, so in other time points that are either
-# 0 or 1 spot, I should look for another dim spot or a doublet spot of the same color.
-crowd2DiffColorRefSpots_nuclei <- enclosedSpotsWithinBoundaries(crowd2DiffColorRefSpots, 
-                                                                     nucleiPolygons_um)
-nrow(crowd2DiffColorRefSpots_nuclei)
-crowd2DiffColorRefSpots_not_nuclei <- crowd2DiffColorRefSpots[!rownames(crowd2DiffColorRefSpots) %in% 
-                                                                              (rownames(crowd2DiffColorRefSpots_nuclei)),]
-nrow(crowd2DiffColorRefSpots_not_nuclei)
-
-crowd2DiffColorRefSpots_not_nuclei_splitSpots <- assign4ColorsFromFQOrGaussianFit_splitSpot(
-    crowd2DiffColorRefSpots_not_nuclei, diffractionLimit, coSpot_dist)
-printCountOfMRNA(crowd2DiffColorLonelyRefSpots_not_nuclei_splitSpots$allColors, mRNAToColor)
-crowd2DiffColorLonelyRefSpots_not_nuclei_splitSpots <- 
-    merge(crowd2DiffColorLonelyRefSpots_not_nuclei_splitSpots, mRNAToColor, by = "allColors", all.x = TRUE)
-
-which(crowd2DiffColorLonelyRefSpots_not_nuclei_splitSpots$allColors == "green yellow red yellow")
-spot <- crowd2DiffColorLonelyRefSpots_not_nuclei_splitSpots[90,]
-plotAllNearby(spot)
-
-
-printCountOfMRNA(crowd2FarSameColorLonelyRefSpots$allColors, mRNAToColor)
-
-
-
-spot <- crowd2DiffColorLonelyRefSpots_not_nuclei[2,]
-plotAllNearby(spot)
-
-
-# change
-# Assume it is 2 spots, later will assume it is 3 spots
-# Get the first time that has 2 spots.
-# Use the perfectly fit Gaussian as the location
-transSpot1 <- transF2Spots[33, ]
-transSpot2 <- transF2Spots[777,]
-refSpot1 <- spot
-refSpot1[,1:2] <- transSpot1[,1:2]
-refSpot1[,11:14] <- c(0,1,0,0)
-refSpot1$transF2CoSpotsIndice <- 33
-refSpot1$allColors <- assign4ColorsFromFQOrGaussianFit(
-    refSpot1, diffractionLimit, coSpot_dist)
-plotAllNearby(refSpot1)
-# y2 is a perfect GaussianFit
-# g2 has large enough amplitube, but a fat radius, so it could be composed of two spots
-g2Fit <- fitGaussian2D(spot, g2TiffMatrix,diffractionLimit)
-y2Fit <- fitGaussian2D(spot, y2TiffMatrix,diffractionLimit)
-
-fit <- fitGaussian2DFor2From1Spot(spot, refTiffMatrix, nearby_distance_um = 1.5)
-spot1 <- spot
-spot1$Pos_X <- 127.19
-spot1$Pox_Y <- 39.03
-spot2 <- spot 
-spot2$Pos_X <- 125.79
-spot2$Pox_Y <- 38.04
-plotAllNearby(spot1)
-getNearbyMatrix(refTiffMatrix, spotsToIndice2D(spot,pix_XY), 3)
-
-
-
-4: YRY
-3: GGG
-2: GYG
-1: GGG
-
-
-# 9.3 rest spots: 83, which takes too long to analyze, give up
-restRefSpots <- refSpots %>% filter(!(transMergedNumCoSpotsf1 <= 1 
-                                      & transMergedNumCoSpotsf2 <= 1 
-                                      & transMergedNumCoSpotsf3 <= 1 
-                                      & transMergedNumCoSpotsf4 <= 1)
-                                    &!((transMergedNumCoSpotsf1 == 2 
-                                        & transMergedNumCoSpotsf2 < 2 
-                                        & transMergedNumCoSpotsf3 < 2 
-                                        & transMergedNumCoSpotsf4 < 2) 
-                                       |(transMergedNumCoSpotsf1 < 2 
-                                         & transMergedNumCoSpotsf2 == 2 
-                                         & transMergedNumCoSpotsf3 < 2 
-                                         & transMergedNumCoSpotsf4 < 2) 
-                                       |(transMergedNumCoSpotsf1 < 2 
-                                         & transMergedNumCoSpotsf2 < 2 
-                                         & transMergedNumCoSpotsf3 == 2 
-                                         & transMergedNumCoSpotsf4 < 2) 
-                                       |(transMergedNumCoSpotsf1 < 2 
-                                         & transMergedNumCoSpotsf2 < 2 
-                                         & transMergedNumCoSpotsf3 < 2 
-                                         & transMergedNumCoSpotsf4 == 2)))
-
 
 

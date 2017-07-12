@@ -13,6 +13,7 @@ source("/Users/jackie/Downloads/SGTC microscope/2016-08-11-10mRNAs vs 4 exon mRN
 # sigma_r ~ 0.42 * lambda * focal_length / lens_diameter = 0.42 * lambda / (2 * NA) ~ 1/3 r_airy
 # My 20X lens has NA = 0.4, lambda ~ 519nm, 573nm, 617nm and 669nm for Alexa-488, Alexa 546, Alex 594 and Atto-647,
 # so sigma_r ~ 0.42 * (519 | 573 | 617 | 669) / 0.8 ~ 272nm, 301nm, 324nm, 351nm
+# so FWHM ~ 0.515 * (519 | 573 | 617 | 669) / NA = 668nm, 737nm, 794nm, 861nm
 # each pixel = 330nm, so sigma_r ~ 0.85 - 1.09 pixels and r_airy ~ 2.45 - 3.16 pixels
 
 AiryDisk2D = function(amp, x0, y0, nu, bg, matrixCoordX, matrixCoordY) {
@@ -168,8 +169,9 @@ fitGaussian2D = function(spot, tiffMatrix, fit_distance_um, nearby_distance_um =
     Gaussian <- tiffMatrix[nearbyIndice2D]
     
     # guess the init parameters
-    nearbyRadius <- nearby_distance_um # 2
-    avgRadius <- fit_distance_um # 2
+    # Debug 2017/6/17
+    nearbyRadius <- nearby_distance_um / pix_XY# 2
+    avgRadius <- fit_distance_um /pix_XY# 2
     maxAvgIndice <- getMaxNearbyAvgIndice(tiffMatrix, centerIndice, nearbyRadius, avgRadius)
     maxAvgAmp <- getMaxNearbyAvgAmp(tiffMatrix, centerIndice, nearbyRadius, avgRadius)
     bg <- getMinNearbyAmp(tiffMatrix, maxAvgIndice, 5)
@@ -516,6 +518,7 @@ isGoodGaussianFit = function(fit, pValueLimit = 0.1, lowerSigmaBound = 0.25, upp
 
 
 # from the Gaussin2D fit, get amp
+# if the fit is NA, return 0
 getAmpFromGaussianFit = function(fit) {
     amp <- 0
     if (length(fit) != 1) {

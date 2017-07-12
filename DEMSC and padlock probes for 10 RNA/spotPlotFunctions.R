@@ -21,7 +21,7 @@ scaled_matrix = function (tiffMatrix, curve = 1) {
 
 
 # Load outline file from FQ to create shape file.
-# Input: outlineFilename
+# Input: outlineFilename, which cannot contain the entire image outline
 # Output: list of polygons, each as set of indice2D 
 ## dataframe of xIndice and yIndice
 readOutlines = function (outlineFilename, first_important_line) {
@@ -42,7 +42,7 @@ readOutlines = function (outlineFilename, first_important_line) {
     }
     polygons
 }
-
+attr(readOutlines, "comment") <- "it cannot contain the entire image outline"
 
 # Input: 2 vectors, or 2 named vectors xIndice, yIndice
 # Output: indice in 2D, actually a matrix with 2 columns with yIndice in the 1st column 
@@ -624,8 +624,9 @@ getMaxNearbyAvgIndice = function(tiffMatrix, centerIndice, nearbyRadius, avgRadi
     centerXs <- getXIndiceFromIndice2D(centerIndice)
     maxAvgAmp <- getAvgAmpSurroundingIndice2D(tiffMatrix, centerIndice, avgRadius)
     maxAvgIndice <- centerIndice
-    for (dx in -nearbyRadius : nearbyRadius) {
-        for (dy in -nearbyRadius : nearbyRadius) {
+    # debug 2017-06-17
+    for (dx in -round(nearbyRadius) : round(nearbyRadius)) {
+        for (dy in -round(nearbyRadius) : round(nearbyRadius)) {
             distance <- sqrt(dx^2 + dy^2)
             x <- centerXs + dx
             y <- centerYs + dy
